@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/go-pg/pg/v9"
+	"voice-chat-server/logger"
 )
 
 const (
@@ -22,9 +23,11 @@ func (service *DBService) Connect() error {
 		Password: pgPassword,
 		Database: pgDbName,
 	})
+	logger.Logger.Infof("Postgresql connected, addr: %s", pgAddr)
 	return nil
 }
 
 func (service *DBService) CloseConnection() {
 	_ = service.DB.Close()
+	logger.Logger.Info("Postgresql disconnected")
 }

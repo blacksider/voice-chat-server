@@ -3,9 +3,9 @@ package controller
 import (
 	"encoding/json"
 	"github.com/gorilla/mux"
-	"log"
 	"net/http"
 	"strconv"
+	"voice-chat-server/logger"
 	"voice-chat-server/service"
 )
 
@@ -17,7 +17,7 @@ func (controller *ChatServerController) ListServers(w http.ResponseWriter, r *ht
 	serverList := controller.ChatServerService.ListServers()
 	err := json.NewEncoder(w).Encode(serverList)
 	if err != nil {
-		log.Println("encode failed:", err)
+		logger.Logger.Error("encode failed:", err)
 	}
 }
 
@@ -31,19 +31,19 @@ func (controller *ChatServerController) GetServerInfo(w http.ResponseWriter, r *
 	id := params["id"]
 	idInt, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		writeErrResponse(w, err)
 		return
 	}
 	serverInfo, err := controller.ChatServerService.GetServerInfo(idInt)
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		writeErrResponse(w, err)
 		return
 	}
 	err = json.NewEncoder(w).Encode(serverInfo)
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		writeErrResponse(w, err)
 	}
 }
@@ -53,19 +53,19 @@ func (controller *ChatServerController) ListRooms(w http.ResponseWriter, r *http
 
 	idInt, err := strconv.ParseInt(serverId, 10, 64)
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		writeErrResponse(w, err)
 		return
 	}
 	roomList, err := controller.ChatServerService.ListRooms(idInt)
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		writeErrResponse(w, err)
 		return
 	}
 	err = json.NewEncoder(w).Encode(roomList)
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		writeErrResponse(w, err)
 	}
 }

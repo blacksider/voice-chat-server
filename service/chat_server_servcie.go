@@ -3,7 +3,7 @@ package service
 import (
 	"errors"
 	"github.com/go-pg/pg/v9/orm"
-	"log"
+	"voice-chat-server/logger"
 	"voice-chat-server/models"
 )
 
@@ -12,6 +12,7 @@ type ChatServerService struct {
 }
 
 func (service *ChatServerService) Init() error {
+	logger.Logger.Info("Init ChatServerService")
 	for _, model := range []interface{}{(*models.ChatServer)(nil), (*models.ChatRoom)(nil)} {
 		err := service.DbService.DB.CreateTable(model, &orm.CreateTableOptions{
 			IfNotExists:   true,
@@ -26,6 +27,7 @@ func (service *ChatServerService) Init() error {
 
 	var serverInfo models.ChatServer
 	if server == nil {
+		logger.Logger.Info("Init default server")
 		serverInfo = models.ChatServer{
 			Id:          1,
 			Name:        "Default server",
@@ -35,10 +37,12 @@ func (service *ChatServerService) Init() error {
 		if err != nil {
 			return err
 		}
+		logger.Logger.Info("Init default server succeed")
 
 		room := service.GetRoomById(1)
 		var roomInfo models.ChatRoom
 		if room == nil {
+			logger.Logger.Info("Init default room")
 			roomInfo = models.ChatRoom{
 				Id:          1,
 				Name:        "Default room",
@@ -49,6 +53,7 @@ func (service *ChatServerService) Init() error {
 			if err != nil {
 				return err
 			}
+			logger.Logger.Info("Init default room succeed")
 		}
 	}
 	return nil
@@ -58,7 +63,7 @@ func (service *ChatServerService) GetServerById(id int64) *models.ChatServer {
 	var server models.ChatServer
 	err := service.DbService.DB.Model(&server).Where("id = ?", id).Select()
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		return nil
 	}
 	return &server
@@ -68,7 +73,7 @@ func (service *ChatServerService) GetRoomById(id int64) *models.ChatRoom {
 	var room models.ChatRoom
 	err := service.DbService.DB.Model(&room).Where("id = ?", id).Select()
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		return nil
 	}
 	return &room
@@ -80,7 +85,7 @@ func (service *ChatServerService) ListServers() []models.ChatServerData {
 	var servers []models.ChatServer
 	err := service.DbService.DB.Model(&servers).Select()
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		return serverList
 	}
 	for _, server := range servers {
@@ -117,7 +122,7 @@ func (service *ChatServerService) ListRooms(serverId int64) ([]models.ChatRoom, 
 		JoinOn("svr.id = ?", serverId).
 		Select()
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 	}
 	if err != nil || rooms == nil {
 		return nil, errors.New("can not find rooms")

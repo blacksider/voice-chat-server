@@ -2,24 +2,24 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"github.com/go-pg/pg/v9"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
 	"voice-chat-server/controller"
+	"voice-chat-server/logger"
 	"voice-chat-server/service"
 )
 
 var dbService = service.DBService{}
 var sessionService = service.SessionService{
-	DbService: &dbService,
+	UserService: &chatUserService,
+	DbService:   &dbService,
 }
 var chatServerService = service.ChatServerService{
 	DbService: &dbService,
@@ -36,13 +36,15 @@ var chatServerController = controller.ChatServerController{
 }
 var connectionManager = service.ChatRoomConnectionManager{
 	ChatServerService: &chatServerService,
+	Session:           &sessionService,
+	DbService:         &dbService,
 	Upgrader:          &websocket.Upgrader{},
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Do stuff here
-		log.Println(r.RequestURI)
+		logger.Logger.Debug("Current req:", r.RequestURI)
 		// Call the next handler, which can be another middleware in the chain, or the final handler.
 		next.ServeHTTP(w, r)
 	})
@@ -74,10 +76,12 @@ func validateTokenMiddleware(next http.Handler) http.Handler {
 }
 
 func doInit() {
+	logger.Init()
+
 	// init in transaction
 	err := dbService.Connect()
 	if err != nil {
-		log.Fatal(err)
+		logger.Logger.Fatal(err)
 	}
 	err = dbService.DB.RunInTransaction(func(tx *pg.Tx) error {
 		err = sessionService.Init()
@@ -92,26 +96,20 @@ func doInit() {
 		if err != nil {
 			return err
 		}
+		err = connectionManager.Init()
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
-		log.Fatal(err)
+		logger.Logger.Fatal(err)
 	}
 }
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
-	var wait time.Duration
-	flag.DurationVar(&wait,
-		"graceful-timeout",
-		time.Second*15,
-		"the duration for which the server gracefully wait for existing connections to finish - e.g. 15s or 1m")
-	flag.Parse()
-
 	doInit()
 
-	log.SetFlags(0)
 	r := mux.NewRouter()
 	r.HandleFunc("/ws/connect", connectionManager.Connect)
 	r.HandleFunc("/api/auth/login", authController.DoLogin).Methods("POST")
@@ -121,7 +119,7 @@ func main() {
 	r.HandleFunc("/api/server/room", chatServerController.ListRooms).Methods("GET")
 	r.Use(loggingMiddleware, validateTokenMiddleware)
 
-	log.Printf("server start at: localhost:8080")
+	logger.Logger.Info("Server start at: localhost:8080")
 	srv := http.Server{
 		Addr:         "0.0.0.0:8080",
 		WriteTimeout: time.Second * 15,
@@ -130,8 +128,8 @@ func main() {
 		Handler:      r,
 	}
 	go func() {
-		if err := srv.ListenAndServe(); err != nil {
-			log.Println(err)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Logger.Error(err)
 		}
 	}()
 
@@ -140,13 +138,17 @@ func main() {
 
 	<-c
 
-	ctx, cancel := context.WithTimeout(context.Background(), wait)
-	defer cancel()
-	defer dbService.CloseConnection()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+
+	defer func() {
+		sessionService.Close()
+		dbService.CloseConnection()
+		cancel()
+	}()
+
 	err := srv.Shutdown(ctx)
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 	}
-	log.Println("server is shutting down")
-	os.Exit(0)
+	logger.Logger.Info("Server shut down")
 }

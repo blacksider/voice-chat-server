@@ -4,7 +4,7 @@ import (
 	"github.com/go-pg/pg/v9/orm"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
-	"log"
+	"voice-chat-server/logger"
 	"voice-chat-server/models"
 )
 
@@ -13,6 +13,7 @@ type ChatUserService struct {
 }
 
 func (service *ChatUserService) Init() error {
+	logger.Logger.Info("Init ChatUserService")
 	for _, model := range []interface{}{(*models.ChatUser)(nil)} {
 		err := service.DbService.DB.CreateTable(model, &orm.CreateTableOptions{
 			IfNotExists:   true,
@@ -25,6 +26,7 @@ func (service *ChatUserService) Init() error {
 
 	user := service.GetUserByUsername("admin")
 	if user == nil {
+		logger.Logger.Info("Init default user: 'admin'")
 		hash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
 		if err != nil {
 			return err
@@ -39,6 +41,7 @@ func (service *ChatUserService) Init() error {
 		if err != nil {
 			return err
 		}
+		logger.Logger.Info("Init default user succeed")
 	}
 	return nil
 }
@@ -47,7 +50,7 @@ func (service *ChatUserService) GetUserByUsername(username string) *models.ChatU
 	var user models.ChatUser
 	err := service.DbService.DB.Model(&user).Where("user_name = ?", username).Select()
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		return nil
 	}
 	return &user
@@ -82,7 +85,7 @@ func (service *ChatUserService) AuthUser(username string, password string) *mode
 	}
 	err := bcrypt.CompareHashAndPassword([]byte(usernameQL.Password), []byte(password))
 	if err != nil {
-		log.Println(err)
+		logger.Logger.Error(err)
 		return nil
 	}
 

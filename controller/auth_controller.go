@@ -5,17 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/dgrijalva/jwt-go/request"
-	"log"
 	"net/http"
 	"time"
 	"voice-chat-server/dto"
+	"voice-chat-server/logger"
 	"voice-chat-server/models"
 	"voice-chat-server/service"
-)
-
-const (
-	SecretKey = "ChatServerSecretLey_Macarron"
+	"voice-chat-server/utils/auth"
 )
 
 type AuthController struct {
@@ -53,11 +49,11 @@ func (controller *AuthController) DoLogin(w http.ResponseWriter, r *http.Request
 	claims["iat"] = time.Now().Unix()
 	token.Claims = claims
 
-	tokenString, err := token.SignedString([]byte(SecretKey))
+	tokenString, err := token.SignedString([]byte(auth.SecretKey))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = fmt.Fprintln(w, "Error while signing the token")
-		log.Fatal(err)
+		logger.Logger.Fatal(err)
 	}
 
 	controller.Session.Create(user, tokenString)
@@ -65,27 +61,12 @@ func (controller *AuthController) DoLogin(w http.ResponseWriter, r *http.Request
 	response := dto.JwtToken{Token: tokenString}
 	err = json.NewEncoder(w).Encode(response)
 	if err != nil {
-		log.Println("encode failed:", err)
+		logger.Logger.Error("encode failed:", err)
 	}
-}
-
-func (controller *AuthController) getToken(w http.ResponseWriter, r *http.Request) *jwt.Token {
-	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
-		func(token *jwt.Token) (interface{}, error) {
-			return []byte(SecretKey), nil
-		})
-
-	if err == nil {
-		if token.Valid {
-			return token
-		}
-	}
-	log.Println(err)
-	return nil
 }
 
 func (controller *AuthController) ValidateToken(w http.ResponseWriter, r *http.Request) bool {
-	token := controller.getToken(w, r)
+	token := auth.GetTokenFromRequest(r)
 	if token != nil {
 		if token.Valid {
 			return true
@@ -95,18 +76,8 @@ func (controller *AuthController) ValidateToken(w http.ResponseWriter, r *http.R
 }
 
 func (controller *AuthController) GetAuthInfo(w http.ResponseWriter, r *http.Request) {
-	jwtToken := controller.getToken(w, r)
-	log.Println("Token: ", jwtToken.Raw)
-	session := controller.Session.GetByToken(jwtToken.Raw)
-	if session == nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = fmt.Fprint(w, "Token not found")
-		return
-	}
-	user := controller.UserService.GetUserByUsername(session.UserName)
+	user := controller.Session.GetUserFromRequest(w, r)
 	if user == nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = fmt.Fprint(w, "User not found")
 		return
 	}
 	authInfo := dto.AuthInfo{
@@ -115,6 +86,6 @@ func (controller *AuthController) GetAuthInfo(w http.ResponseWriter, r *http.Req
 	}
 	err := json.NewEncoder(w).Encode(&authInfo)
 	if err != nil {
-		log.Println("encode failed:", err)
+		logger.Logger.Error("encode failed:", err)
 	}
 }
